@@ -22,19 +22,23 @@ const upload = multer({
 });
 
 function createTransporter(overridePort, overrideSecure) {
-  const port = overridePort || parseInt(process.env.SMTP_PORT) || 465;
-  const isSecure = overrideSecure !== undefined ? overrideSecure : (process.env.SMTP_SECURE === 'true' || port === 465);
+  const host = (process.env.SMTP_HOST || 'mail.livingvinepropertiesinvestment.com').trim();
+  const user = (process.env.SMTP_USER || 'connect@livingvinepropertiesinvestment.com').trim();
+  const pass = (process.env.SMTP_PASS || 'Livingvine2026.').trim();
+  const port = overridePort || (process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : 465);
+  const isSecure = overrideSecure !== undefined ? overrideSecure : (port === 465 || process.env.SMTP_SECURE === 'true');
 
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: port,
+    host,
+    port,
     secure: isSecure,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-    connectionTimeout: 15000, // 15s timeout
-    greetingTimeout: 15000,
+    auth: { user, pass },
+    pool: true,
+    maxConnections: 3,
+    maxMessages: 100,
+    rateLimit: 5,
+    connectionTimeout: 20000,
+    greetingTimeout: 20000,
     socketTimeout: 30000,
     tls: {
       rejectUnauthorized: false,
@@ -201,7 +205,10 @@ router.post('/', upload.single('file'), async (req, res) => {
 });
 
 async function sendEmailsInBackground(campaignId, recipients, subject, bodyTemplate) {
-  const serverUrl = process.env.SERVER_URL || 'http://localhost:5000';
+  const serverUrl = (process.env.SERVER_URL || 'http://localhost:5000').trim();
+  const fromName = (process.env.FROM_NAME || 'Living Vine Properties Investment').trim();
+  const fromEmail = (process.env.FROM_EMAIL || 'connect@livingvinepropertiesinvestment.com').trim();
+
   let transporter;
 
   try {
@@ -228,35 +235,55 @@ async function sendEmailsInBackground(campaignId, recipients, subject, bodyTempl
   let sentCount = 0;
   let failedCount = 0;
 
-  for (const recipient of recipients) {
-    try {
-      const htmlBody = buildEmailHtml(bodyTemplate, recipient.name, recipient._id, serverUrl);
+  for (let i = 0; i < recipients.length; i++) {
+    const recipient = recipients[i];
+    let success = false;
+    let lastError = '';
 
-      await transporter.sendMail({
-        from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
-        to: `"${recipient.name}" <${recipient.email}>`,
-        replyTo: process.env.FROM_EMAIL,
-        subject,
-        html: htmlBody,
-        text: bodyTemplate.replace(/\{name\}/gi, recipient.name),
-      });
+    const htmlBody = buildEmailHtml(bodyTemplate, recipient.name, recipient._id, serverUrl);
+    const mailOptions = {
+      from: `"${fromName}" <${fromEmail}>`,
+      to: `"${recipient.name}" <${recipient.email}>`,
+      replyTo: fromEmail,
+      subject,
+      html: htmlBody,
+      text: bodyTemplate.replace(/\{name\}/gi, recipient.name),
+    };
 
+    // Up to 2 send attempts per recipient for maximum reliability
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        await transporter.sendMail(mailOptions);
+        success = true;
+        break;
+      } catch (sendErr) {
+        lastError = sendErr.message;
+        console.warn(`Attempt ${attempt} for ${recipient.email} failed: ${lastError}`);
+        if (attempt < 2) {
+          await new Promise(res => setTimeout(res, 500));
+        }
+      }
+    }
+
+    if (success) {
       recipient.status = 'sent';
       recipient.sentAt = new Date();
+      recipient.error = null;
       await recipient.save();
       sentCount++;
-
-      await new Promise(resolve => setTimeout(resolve, 250));
-
-    } catch (err) {
-      console.error(`Failed to send to ${recipient.email}:`, err.message);
+    } else {
+      console.error(`Failed to send to ${recipient.email}: ${lastError}`);
       recipient.status = 'failed';
-      recipient.error = err.message;
+      recipient.error = lastError;
       await recipient.save();
       failedCount++;
     }
 
+    // Immediately update campaign live progress in MongoDB
     await Campaign.findByIdAndUpdate(campaignId, { sent: sentCount, failed: failedCount });
+
+    // Subtle delay between sends to prevent provider rate limiting
+    await new Promise(resolve => setTimeout(resolve, 200));
   }
 
   const finalStatus = failedCount === recipients.length ? 'failed' :

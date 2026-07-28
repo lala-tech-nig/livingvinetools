@@ -33,11 +33,14 @@ export default function CampaignDetailPage({ params }) {
     }
   }, [id, addToast]);
 
+  const isSending = campaign?.status === 'sending';
+
   useEffect(() => {
     fetchCampaign();
-    const interval = setInterval(fetchCampaign, 5000);
+    const pollInterval = isSending ? 1000 : 5000;
+    const interval = setInterval(fetchCampaign, pollInterval);
     return () => clearInterval(interval);
-  }, [fetchCampaign]);
+  }, [fetchCampaign, isSending]);
 
   const handleMarkReplied = async (recipientId) => {
     try {
@@ -120,6 +123,38 @@ export default function CampaignDetailPage({ params }) {
       </div>
 
       <div className="page-body">
+        {/* Live Sending Progress Banner */}
+        {campaign.status === 'sending' && (
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(128, 0, 32, 0.08), rgba(128, 0, 32, 0.03))',
+            border: '1.5px solid var(--brand-wine-border)',
+            borderRadius: '16px',
+            padding: '20px 24px',
+            marginBottom: '28px',
+            boxShadow: 'var(--shadow-sm)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span className="spinner" style={{ width: '22px', height: '22px', border: '3px solid rgba(128,0,32,0.2)', borderTopColor: 'var(--brand-wine)' }} />
+                <div>
+                  <div style={{ fontWeight: 800, color: 'var(--brand-wine)', fontSize: '15px' }}>
+                    Bulk Send In Progress
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    Processing recipient {sent + failed} of {total} ({sent} sent successfully, {failed} failed)
+                  </div>
+                </div>
+              </div>
+              <span className="badge badge-wine" style={{ padding: '6px 14px', fontSize: '12px' }}>
+                ⚡ Real-Time Progress: {Math.round(((sent + failed) / (total || 1)) * 100)}%
+              </span>
+            </div>
+            <div className="progress-bar" style={{ height: '10px' }}>
+              <div className="progress-fill" style={{ width: `${Math.round(((sent + failed) / (total || 1)) * 100)}%`, transition: 'width 0.4s ease' }} />
+            </div>
+          </div>
+        )}
+
         {/* Stat Cards */}
         <div className="stats-grid">
           <div className="stat-card">

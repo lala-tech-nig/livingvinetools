@@ -41,11 +41,14 @@ export default function DashboardPage() {
     }
   }, [addToast]);
 
+  const activeCampaign = campaigns.find(c => c.status === 'sending');
+
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 5000);
+    const pollInterval = activeCampaign ? 1000 : 5000;
+    const interval = setInterval(fetchData, pollInterval);
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [fetchData, activeCampaign]);
 
   const handleDelete = async (id, name) => {
     if (!confirm(`Are you sure you want to delete campaign "${name}"?`)) return;
@@ -66,7 +69,7 @@ export default function DashboardPage() {
   const handleCampaignCreated = (data) => {
     setShowModal(false);
     addToast('success', '🚀 Campaign Started!', `"${data.name}" is sending to ${data.total} recipients`, 6000);
-    setTimeout(fetchData, 1000);
+    fetchData();
   };
 
   return (
@@ -87,6 +90,43 @@ export default function DashboardPage() {
       </div>
 
       <div className="page-body">
+        {/* Active Sending Progress Banner */}
+        {activeCampaign && (
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(128, 0, 32, 0.08), rgba(128, 0, 32, 0.03))',
+            border: '1.5px solid var(--brand-wine-border)',
+            borderRadius: '16px',
+            padding: '20px 24px',
+            marginBottom: '28px',
+            boxShadow: 'var(--shadow-sm)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span className="spinner" style={{ width: '22px', height: '22px', border: '3px solid rgba(128,0,32,0.2)', borderTopColor: 'var(--brand-wine)' }} />
+                <div>
+                  <div style={{ fontWeight: 800, color: 'var(--brand-wine)', fontSize: '15px' }}>
+                    Sending Campaign: {activeCampaign.name}
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    Sending emails in real-time... ({activeCampaign.sent_count || activeCampaign.sent || 0} of {activeCampaign.total_count || activeCampaign.total || 0} completed)
+                  </div>
+                </div>
+              </div>
+              <span className="badge badge-wine" style={{ padding: '6px 14px', fontSize: '12px' }}>
+                ⚡ Live Updating Every Second
+              </span>
+            </div>
+            <div className="progress-bar" style={{ height: '10px' }}>
+              <div
+                className="progress-fill"
+                style={{
+                  width: `${Math.round((((activeCampaign.sent_count || activeCampaign.sent || 0) + (activeCampaign.failed_count || activeCampaign.failed || 0)) / (activeCampaign.total_count || activeCampaign.total || 1)) * 100)}%`,
+                  transition: 'width 0.4s ease'
+                }}
+              />
+            </div>
+          </div>
+        )}
         {/* Overall Statistics */}
         <div className="stats-grid">
           <StatsCard
