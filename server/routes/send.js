@@ -21,17 +21,24 @@ const upload = multer({
   }
 });
 
-function createTransporter() {
+function createTransporter(overridePort, overrideSecure) {
+  const port = overridePort || parseInt(process.env.SMTP_PORT) || 465;
+  const isSecure = overrideSecure !== undefined ? overrideSecure : (process.env.SMTP_SECURE === 'true' || port === 465);
+
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT) || 587,
-    secure: process.env.SMTP_SECURE === 'true',
+    port: port,
+    secure: isSecure,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
+    connectionTimeout: 15000, // 15s timeout
+    greetingTimeout: 15000,
+    socketTimeout: 30000,
     tls: {
-      rejectUnauthorized: false
+      rejectUnauthorized: false,
+      minVersion: 'TLSv1.2'
     }
   });
 }
@@ -201,10 +208,21 @@ async function sendEmailsInBackground(campaignId, recipients, subject, bodyTempl
     transporter = createTransporter();
     await transporter.verify();
   } catch (err) {
-    console.error('SMTP connection failed:', err.message);
-    await Recipient.updateMany({ campaignId }, { status: 'failed', error: 'SMTP Connection Error: ' + err.message });
-    await Campaign.findByIdAndUpdate(campaignId, { status: 'failed', failed: recipients.length });
-    return;
+    console.warn('Primary SMTP connection attempt failed:', err.message);
+    const primaryPort = parseInt(process.env.SMTP_PORT) || 465;
+    const fallbackPort = primaryPort === 465 ? 587 : 465;
+    const fallbackSecure = fallbackPort === 465;
+    try {
+      console.log(`Attempting fallback SMTP port ${fallbackPort}...`);
+      transporter = createTransporter(fallbackPort, fallbackSecure);
+      await transporter.verify();
+      console.log(`✅ Fallback SMTP connection to port ${fallbackPort} succeeded!`);
+    } catch (fallbackErr) {
+      console.error('All SMTP connection attempts failed:', fallbackErr.message);
+      await Recipient.updateMany({ campaignId }, { status: 'failed', error: 'SMTP Connection Error: ' + err.message });
+      await Campaign.findByIdAndUpdate(campaignId, { status: 'failed', failed: recipients.length });
+      return;
+    }
   }
 
   let sentCount = 0;
