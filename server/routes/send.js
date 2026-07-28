@@ -210,7 +210,7 @@ router.post('/', upload.single('file'), async (req, res) => {
 });
 
 async function sendEmailsInBackground(campaignId, recipients, subject, bodyTemplate) {
-  const serverUrl = (process.env.SERVER_URL || 'http://localhost:5000').trim();
+  const serverUrl = (process.env.SERVER_URL || 'https://livingvinetools.onrender.com').trim();
   const fromName = (process.env.FROM_NAME || 'Living Vine Properties Investment').trim();
   const fromEmail = (process.env.FROM_EMAIL || 'connect@livingvinepropertiesinvestment.com').trim();
 
