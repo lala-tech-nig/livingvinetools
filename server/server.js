@@ -12,7 +12,7 @@ connectDb();
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  origin: ['https://livingvinetools.vercel.app'],
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
