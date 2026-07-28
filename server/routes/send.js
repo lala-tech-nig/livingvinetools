@@ -265,6 +265,9 @@ async function sendEmailsInBackground(campaignId, recipients, subject, bodyTempl
         lastError = sendErr.message;
         console.warn(`Attempt ${attempt} for ${recipient.email} failed: ${lastError}`);
         if (attempt < 2) {
+          try {
+            transporter = createTransporter();
+          } catch (tErr) {}
           await new Promise(res => setTimeout(res, 500));
         }
       }
@@ -310,12 +313,11 @@ router.post('/preview', upload.single('file'), (req, res) => {
   }
 });
 
-// POST /api/send/test-smtp — verify & send test email to target address
-router.post('/test-smtp', async (req, res) => {
-  const { targetEmail } = req.body || {};
+// Helper function for test SMTP send
+async function runTestSMTP(targetEmail) {
   const to = targetEmail || 'lalatechnigltd@gmail.com';
-
   let transporter;
+
   try {
     transporter = createTransporter();
     await transporter.verify();
@@ -326,27 +328,44 @@ router.post('/test-smtp', async (req, res) => {
       await transporter.verify();
     } catch (err2) {
       console.error('All SMTP test verification attempts failed:', err2.message);
-      return res.status(500).json({ success: false, error: 'SMTP Verification Failed: ' + err.message });
+      throw new Error('SMTP Verification Failed: ' + err.message);
     }
   }
 
-  try {
-    const info = await transporter.sendMail({
-      from: `"${(process.env.FROM_NAME || 'Living Vine Properties Investment').trim()}" <${(process.env.FROM_EMAIL || 'connect@livingvinepropertiesinvestment.com').trim()}>`,
-      to,
-      subject: 'LivingVine SMTP Verification Test',
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 24px; color: #111827;">
-          <h2 style="color: #800020;">LivingVine Properties Investment</h2>
-          <p>This is a test email sent from LivingVine Email Hub to confirm that SMTP credentials and delivery are operating properly.</p>
-          <p><strong>Status:</strong> ✅ Operational</p>
-        </div>
-      `
-    });
+  const info = await transporter.sendMail({
+    from: `"${(process.env.FROM_NAME || 'Living Vine Properties Investment').trim()}" <${(process.env.FROM_EMAIL || 'connect@livingvinepropertiesinvestment.com').trim()}>`,
+    to,
+    subject: 'LivingVine SMTP Verification Test',
+    html: `
+      <div style="font-family: Arial, sans-serif; padding: 24px; color: #111827;">
+        <h2 style="color: #800020;">LivingVine Properties Investment</h2>
+        <p>This is a test email sent from LivingVine Email Hub to confirm that SMTP credentials and delivery are operating properly.</p>
+        <p><strong>Status:</strong> ✅ Operational</p>
+      </div>
+    `
+  });
 
-    res.json({ success: true, message: `Test email sent to ${to}`, messageId: info.messageId });
+  return { success: true, message: `Test email sent to ${to}`, messageId: info.messageId };
+}
+
+// POST /api/send/test-smtp — verify & send test email via POST
+router.post('/test-smtp', async (req, res) => {
+  try {
+    const { targetEmail } = req.body || {};
+    const result = await runTestSMTP(targetEmail);
+    res.json(result);
   } catch (err) {
-    console.error('Test SMTP sendMail failed:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/send/test-smtp — verify & send test email via GET
+router.get('/test-smtp', async (req, res) => {
+  try {
+    const targetEmail = req.query.email || 'lalatechnigltd@gmail.com';
+    const result = await runTestSMTP(targetEmail);
+    res.json(result);
+  } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
