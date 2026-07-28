@@ -4,7 +4,6 @@ import StatsCard from './components/StatsCard';
 import CampaignTable from './components/CampaignTable';
 import NewCampaignModal from './components/NewCampaignModal';
 import Toast from './components/Toast';
-import { getApiUrl } from './lib/api';
 
 let toastId = 0;
 
@@ -27,8 +26,8 @@ export default function DashboardPage() {
   const fetchData = useCallback(async () => {
     try {
       const [campaignsRes, statsRes] = await Promise.all([
-        fetch(getApiUrl('/api/campaigns')),
-        fetch(getApiUrl('/api/campaigns/stats')),
+        fetch('/api/campaigns'),
+        fetch('/api/campaigns/stats'),
       ]);
       const campaignsData = await campaignsRes.json();
       const statsData = await statsRes.json();
@@ -42,19 +41,16 @@ export default function DashboardPage() {
     }
   }, [addToast]);
 
-  const activeCampaign = campaigns.find(c => c.status === 'sending');
-
   useEffect(() => {
     fetchData();
-    const pollInterval = activeCampaign ? 1000 : 5000;
-    const interval = setInterval(fetchData, pollInterval);
+    const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
-  }, [fetchData, activeCampaign]);
+  }, [fetchData]);
 
   const handleDelete = async (id, name) => {
     if (!confirm(`Are you sure you want to delete campaign "${name}"?`)) return;
     try {
-      const res = await fetch(getApiUrl(`/api/campaigns/${id}`), { method: 'DELETE' });
+      const res = await fetch(`/api/campaigns/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
         addToast('success', 'Deleted', `Campaign "${name}" removed`);
@@ -70,30 +66,7 @@ export default function DashboardPage() {
   const handleCampaignCreated = (data) => {
     setShowModal(false);
     addToast('success', '🚀 Campaign Started!', `"${data.name}" is sending to ${data.total} recipients`, 6000);
-    fetchData();
-  };
-
-  const [testingSmtp, setTestingSmtp] = useState(false);
-
-  const handleTestSMTP = async () => {
-    setTestingSmtp(true);
-    try {
-      const res = await fetch(getApiUrl('/api/send/test-smtp'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetEmail: 'lalatechnigltd@gmail.com' })
-      });
-      const data = await res.json();
-      if (data.success) {
-        addToast('success', '✅ SMTP Test Successful', `Test email sent to lalatechnigltd@gmail.com!`);
-      } else {
-        throw new Error(data.error);
-      }
-    } catch (err) {
-      addToast('error', '❌ SMTP Connection Error', err.message);
-    } finally {
-      setTestingSmtp(false);
-    }
+    setTimeout(fetchData, 1000);
   };
 
   return (
@@ -105,57 +78,15 @@ export default function DashboardPage() {
             Overview of all sent bulk emails, tracking metrics, and individual campaign analytics
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <button className="btn btn-secondary btn-lg" onClick={handleTestSMTP} disabled={testingSmtp}>
-            {testingSmtp ? '⚡ Testing SMTP...' : '🔌 Test SMTP Connection'}
-          </button>
-          <button className="btn btn-primary btn-lg" onClick={() => setShowModal(true)}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Create New Bulk Email
-          </button>
-        </div>
+        <button className="btn btn-primary btn-lg" onClick={() => setShowModal(true)}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Create New Bulk Email
+        </button>
       </div>
 
       <div className="page-body">
-        {/* Active Sending Progress Banner */}
-        {activeCampaign && (
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(128, 0, 32, 0.08), rgba(128, 0, 32, 0.03))',
-            border: '1.5px solid var(--brand-wine-border)',
-            borderRadius: '16px',
-            padding: '20px 24px',
-            marginBottom: '28px',
-            boxShadow: 'var(--shadow-sm)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span className="spinner" style={{ width: '22px', height: '22px', border: '3px solid rgba(128,0,32,0.2)', borderTopColor: 'var(--brand-wine)' }} />
-                <div>
-                  <div style={{ fontWeight: 800, color: 'var(--brand-wine)', fontSize: '15px' }}>
-                    Sending Campaign: {activeCampaign.name}
-                  </div>
-                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                    Sending emails in real-time... ({activeCampaign.sent_count || activeCampaign.sent || 0} of {activeCampaign.total_count || activeCampaign.total || 0} completed)
-                  </div>
-                </div>
-              </div>
-              <span className="badge badge-wine" style={{ padding: '6px 14px', fontSize: '12px' }}>
-                ⚡ Live Updating Every Second
-              </span>
-            </div>
-            <div className="progress-bar" style={{ height: '10px' }}>
-              <div
-                className="progress-fill"
-                style={{
-                  width: `${Math.round((((activeCampaign.sent_count || activeCampaign.sent || 0) + (activeCampaign.failed_count || activeCampaign.failed || 0)) / (activeCampaign.total_count || activeCampaign.total || 1)) * 100)}%`,
-                  transition: 'width 0.4s ease'
-                }}
-              />
-            </div>
-          </div>
-        )}
         {/* Overall Statistics */}
         <div className="stats-grid">
           <StatsCard

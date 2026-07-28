@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback, use } from 'react';
 import Link from 'next/link';
 import RecipientTable from '../../components/RecipientTable';
 import Toast from '../../components/Toast';
-import { getApiUrl } from '../../lib/api';
 
 let toastId = 0;
 
@@ -24,7 +23,7 @@ export default function CampaignDetailPage({ params }) {
 
   const fetchCampaign = useCallback(async () => {
     try {
-      const res = await fetch(getApiUrl(`/api/campaigns/${id}`));
+      const res = await fetch(`/api/campaigns/${id}`);
       const data = await res.json();
       if (data.success) setCampaign(data.data);
     } catch {
@@ -34,18 +33,15 @@ export default function CampaignDetailPage({ params }) {
     }
   }, [id, addToast]);
 
-  const isSending = campaign?.status === 'sending';
-
   useEffect(() => {
     fetchCampaign();
-    const pollInterval = isSending ? 1000 : 5000;
-    const interval = setInterval(fetchCampaign, pollInterval);
+    const interval = setInterval(fetchCampaign, 5000);
     return () => clearInterval(interval);
-  }, [fetchCampaign, isSending]);
+  }, [fetchCampaign]);
 
   const handleMarkReplied = async (recipientId) => {
     try {
-      const res = await fetch(getApiUrl(`/api/campaigns/recipients/${recipientId}/reply`), { method: 'PATCH' });
+      const res = await fetch(`/api/campaigns/recipients/${recipientId}/reply`, { method: 'PATCH' });
       const data = await res.json();
       if (data.success) {
         addToast('success', '↩️ Reply Recorded', 'Recipient marked as replied');
@@ -59,7 +55,7 @@ export default function CampaignDetailPage({ params }) {
   };
 
   const downloadExport = (type) => {
-    window.open(getApiUrl(`/api/export/${type}/${id}`), '_blank');
+    window.open(`/api/export/${type}/${id}`, '_blank');
   };
 
   if (loading) {
@@ -124,38 +120,6 @@ export default function CampaignDetailPage({ params }) {
       </div>
 
       <div className="page-body">
-        {/* Live Sending Progress Banner */}
-        {campaign.status === 'sending' && (
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(128, 0, 32, 0.08), rgba(128, 0, 32, 0.03))',
-            border: '1.5px solid var(--brand-wine-border)',
-            borderRadius: '16px',
-            padding: '20px 24px',
-            marginBottom: '28px',
-            boxShadow: 'var(--shadow-sm)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span className="spinner" style={{ width: '22px', height: '22px', border: '3px solid rgba(128,0,32,0.2)', borderTopColor: 'var(--brand-wine)' }} />
-                <div>
-                  <div style={{ fontWeight: 800, color: 'var(--brand-wine)', fontSize: '15px' }}>
-                    Bulk Send In Progress
-                  </div>
-                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                    Processing recipient {sent + failed} of {total} ({sent} sent successfully, {failed} failed)
-                  </div>
-                </div>
-              </div>
-              <span className="badge badge-wine" style={{ padding: '6px 14px', fontSize: '12px' }}>
-                ⚡ Real-Time Progress: {Math.round(((sent + failed) / (total || 1)) * 100)}%
-              </span>
-            </div>
-            <div className="progress-bar" style={{ height: '10px' }}>
-              <div className="progress-fill" style={{ width: `${Math.round(((sent + failed) / (total || 1)) * 100)}%`, transition: 'width 0.4s ease' }} />
-            </div>
-          </div>
-        )}
-
         {/* Stat Cards */}
         <div className="stats-grid">
           <div className="stat-card">

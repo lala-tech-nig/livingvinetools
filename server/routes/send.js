@@ -22,36 +22,25 @@ const upload = multer({
 });
 
 function createTransporter(overridePort, overrideSecure) {
-  let host = (process.env.SMTP_HOST || 'mail.livingvinepropertiesinvestment.com').trim();
-  host = host.replace(/^(https?:\/\/|smtp:\/\/)/i, '').trim();
+  const port = overridePort || parseInt(process.env.SMTP_PORT) || 465;
+  const isSecure = overrideSecure !== undefined ? overrideSecure : (process.env.SMTP_SECURE === 'true' || port === 465);
 
-  const user = (process.env.SMTP_USER || 'connect@livingvinepropertiesinvestment.com').trim();
-  const pass = (process.env.SMTP_PASS || 'Livingvine2026.').trim();
-  const port = overridePort || (process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : 465);
-  const isSecure = overrideSecure !== undefined ? overrideSecure : (port === 465);
-
-  const transportOptions = {
-    host,
-    port,
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: port,
     secure: isSecure,
-    auth: { user, pass },
-    family: 4, // Force IPv4 connection
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+    connectionTimeout: 15000, // 15s timeout
+    greetingTimeout: 15000,
+    socketTimeout: 30000,
     tls: {
       rejectUnauthorized: false,
-      servername: host
+      minVersion: 'TLSv1.2'
     }
-  };
-
-  if (process.env.SMTP_SERVICE || host.includes('gmail')) {
-    delete transportOptions.host;
-    delete transportOptions.port;
-    transportOptions.service = (process.env.SMTP_SERVICE || 'gmail').trim();
-  }
-
-  return nodemailer.createTransport(transportOptions);
+  });
 }
 
 function parseRecipientFile(buffer) {
@@ -212,10 +201,7 @@ router.post('/', upload.single('file'), async (req, res) => {
 });
 
 async function sendEmailsInBackground(campaignId, recipients, subject, bodyTemplate) {
-  const serverUrl = (process.env.SERVER_URL || 'https://livingvinetools.onrender.com').trim();
-  const fromName = (process.env.FROM_NAME || 'Living Vine Properties Investment').trim();
-  const fromEmail = (process.env.FROM_EMAIL || 'connect@livingvinepropertiesinvestment.com').trim();
-
+  const serverUrl = process.env.SERVER_URL || 'http://localhost:5000';
   let transporter;
 
   try {
@@ -242,58 +228,35 @@ async function sendEmailsInBackground(campaignId, recipients, subject, bodyTempl
   let sentCount = 0;
   let failedCount = 0;
 
-  for (let i = 0; i < recipients.length; i++) {
-    const recipient = recipients[i];
-    let success = false;
-    let lastError = '';
+  for (const recipient of recipients) {
+    try {
+      const htmlBody = buildEmailHtml(bodyTemplate, recipient.name, recipient._id, serverUrl);
 
-    const htmlBody = buildEmailHtml(bodyTemplate, recipient.name, recipient._id, serverUrl);
-    const mailOptions = {
-      from: `"${fromName}" <${fromEmail}>`,
-      to: `"${recipient.name}" <${recipient.email}>`,
-      replyTo: fromEmail,
-      subject,
-      html: htmlBody,
-      text: bodyTemplate.replace(/\{name\}/gi, recipient.name),
-    };
+      await transporter.sendMail({
+        from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
+        to: `"${recipient.name}" <${recipient.email}>`,
+        replyTo: process.env.FROM_EMAIL,
+        subject,
+        html: htmlBody,
+        text: bodyTemplate.replace(/\{name\}/gi, recipient.name),
+      });
 
-    // Up to 2 send attempts per recipient for maximum reliability
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        await transporter.sendMail(mailOptions);
-        success = true;
-        break;
-      } catch (sendErr) {
-        lastError = sendErr.message;
-        console.warn(`Attempt ${attempt} for ${recipient.email} failed: ${lastError}`);
-        if (attempt < 2) {
-          try {
-            transporter = createTransporter();
-          } catch (tErr) {}
-          await new Promise(res => setTimeout(res, 500));
-        }
-      }
-    }
-
-    if (success) {
       recipient.status = 'sent';
       recipient.sentAt = new Date();
-      recipient.error = null;
       await recipient.save();
       sentCount++;
-    } else {
-      console.error(`Failed to send to ${recipient.email}: ${lastError}`);
+
+      await new Promise(resolve => setTimeout(resolve, 250));
+
+    } catch (err) {
+      console.error(`Failed to send to ${recipient.email}:`, err.message);
       recipient.status = 'failed';
-      recipient.error = lastError;
+      recipient.error = err.message;
       await recipient.save();
       failedCount++;
     }
 
-    // Immediately update campaign live progress in MongoDB
     await Campaign.findByIdAndUpdate(campaignId, { sent: sentCount, failed: failedCount });
-
-    // Subtle delay between sends to prevent provider rate limiting
-    await new Promise(resolve => setTimeout(resolve, 200));
   }
 
   const finalStatus = failedCount === recipients.length ? 'failed' :
@@ -312,67 +275,6 @@ router.post('/preview', upload.single('file'), (req, res) => {
     res.json({ success: true, data: { recipients, count: recipients.length } });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
-  }
-});
-
-// Helper function for test SMTP send
-async function runTestSMTP(targetEmail) {
-  const to = targetEmail || 'lalatechnigltd@gmail.com';
-  let transporter;
-
-  try {
-    transporter = createTransporter();
-    await transporter.verify();
-  } catch (err) {
-    console.warn('Primary SMTP test verification failed, attempting port 587 fallback...', err.message);
-    try {
-      transporter = createTransporter(587, false);
-      await transporter.verify();
-    } catch (err2) {
-      console.error('All SMTP test verification attempts failed:', err2.message);
-      const isTimeout = err.message.toLowerCase().includes('timeout') || err2.message.toLowerCase().includes('timeout');
-      const detailMsg = isTimeout
-        ? `SMTP Timeout on Render: Cloud host blocked port 465/587 outbound to ${process.env.SMTP_HOST || 'cPanel'}. Please set SMTP_HOST=smtp.gmail.com (with SMTP_USER & Gmail App Password) or a transactional relay (Brevo/SendGrid) in Render Environment Variables.`
-        : `SMTP Connection Failed: ${err.message}`;
-      throw new Error(detailMsg);
-    }
-  }
-
-  const info = await transporter.sendMail({
-    from: `"${(process.env.FROM_NAME || 'Living Vine Properties Investment').trim()}" <${(process.env.FROM_EMAIL || 'connect@livingvinepropertiesinvestment.com').trim()}>`,
-    to,
-    subject: 'LivingVine SMTP Verification Test',
-    html: `
-      <div style="font-family: Arial, sans-serif; padding: 24px; color: #111827;">
-        <h2 style="color: #800020;">LivingVine Properties Investment</h2>
-        <p>This is a test email sent from LivingVine Email Hub to confirm that SMTP credentials and delivery are operating properly.</p>
-        <p><strong>Status:</strong> ✅ Operational</p>
-      </div>
-    `
-  });
-
-  return { success: true, message: `Test email sent to ${to}`, messageId: info.messageId };
-}
-
-// POST /api/send/test-smtp — verify & send test email via POST
-router.post('/test-smtp', async (req, res) => {
-  try {
-    const { targetEmail } = req.body || {};
-    const result = await runTestSMTP(targetEmail);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// GET /api/send/test-smtp — verify & send test email via GET
-router.get('/test-smtp', async (req, res) => {
-  try {
-    const targetEmail = req.query.email || 'lalatechnigltd@gmail.com';
-    const result = await runTestSMTP(targetEmail);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
   }
 });
 
