@@ -1,5 +1,6 @@
 'use client';
 import { useState, useRef, useCallback } from 'react';
+import { getApiUrl } from '../lib/api';
 
 export default function NewCampaignModal({ onClose, onSuccess }) {
   const [step, setStep] = useState(1);
@@ -27,7 +28,7 @@ export default function NewCampaignModal({ onClose, onSuccess }) {
     formData.append('file', selectedFile);
 
     try {
-      const res = await fetch('/api/send/preview', { method: 'POST', body: formData });
+      const res = await fetch(getApiUrl('/api/send/preview'), { method: 'POST', body: formData });
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
       setRecipients(data.data.recipients);
@@ -74,7 +75,7 @@ export default function NewCampaignModal({ onClose, onSuccess }) {
     formData.append('body', body);
 
     try {
-      const res = await fetch('/api/send', { method: 'POST', body: formData });
+      const res = await fetch(getApiUrl('/api/send'), { method: 'POST', body: formData });
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
       onSuccess && onSuccess(data.data);

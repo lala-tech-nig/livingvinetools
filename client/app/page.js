@@ -4,6 +4,7 @@ import StatsCard from './components/StatsCard';
 import CampaignTable from './components/CampaignTable';
 import NewCampaignModal from './components/NewCampaignModal';
 import Toast from './components/Toast';
+import { getApiUrl } from './lib/api';
 
 let toastId = 0;
 
@@ -26,8 +27,8 @@ export default function DashboardPage() {
   const fetchData = useCallback(async () => {
     try {
       const [campaignsRes, statsRes] = await Promise.all([
-        fetch('/api/campaigns'),
-        fetch('/api/campaigns/stats'),
+        fetch(getApiUrl('/api/campaigns')),
+        fetch(getApiUrl('/api/campaigns/stats')),
       ]);
       const campaignsData = await campaignsRes.json();
       const statsData = await statsRes.json();
@@ -53,7 +54,7 @@ export default function DashboardPage() {
   const handleDelete = async (id, name) => {
     if (!confirm(`Are you sure you want to delete campaign "${name}"?`)) return;
     try {
-      const res = await fetch(`/api/campaigns/${id}`, { method: 'DELETE' });
+      const res = await fetch(getApiUrl(`/api/campaigns/${id}`), { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
         addToast('success', 'Deleted', `Campaign "${name}" removed`);
@@ -77,7 +78,7 @@ export default function DashboardPage() {
   const handleTestSMTP = async () => {
     setTestingSmtp(true);
     try {
-      const res = await fetch('/api/send/test-smtp', {
+      const res = await fetch(getApiUrl('/api/send/test-smtp'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ targetEmail: 'lalatechnigltd@gmail.com' })

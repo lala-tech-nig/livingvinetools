@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, use } from 'react';
 import Link from 'next/link';
 import RecipientTable from '../../components/RecipientTable';
 import Toast from '../../components/Toast';
+import { getApiUrl } from '../../lib/api';
 
 let toastId = 0;
 
@@ -23,7 +24,7 @@ export default function CampaignDetailPage({ params }) {
 
   const fetchCampaign = useCallback(async () => {
     try {
-      const res = await fetch(`/api/campaigns/${id}`);
+      const res = await fetch(getApiUrl(`/api/campaigns/${id}`));
       const data = await res.json();
       if (data.success) setCampaign(data.data);
     } catch {
@@ -44,7 +45,7 @@ export default function CampaignDetailPage({ params }) {
 
   const handleMarkReplied = async (recipientId) => {
     try {
-      const res = await fetch(`/api/campaigns/recipients/${recipientId}/reply`, { method: 'PATCH' });
+      const res = await fetch(getApiUrl(`/api/campaigns/recipients/${recipientId}/reply`), { method: 'PATCH' });
       const data = await res.json();
       if (data.success) {
         addToast('success', '↩️ Reply Recorded', 'Recipient marked as replied');
@@ -58,7 +59,7 @@ export default function CampaignDetailPage({ params }) {
   };
 
   const downloadExport = (type) => {
-    window.open(`/api/export/${type}/${id}`, '_blank');
+    window.open(getApiUrl(`/api/export/${type}/${id}`), '_blank');
   };
 
   if (loading) {
