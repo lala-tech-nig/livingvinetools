@@ -312,13 +312,25 @@ router.post('/preview', upload.single('file'), (req, res) => {
 
 // POST /api/send/test-smtp — verify & send test email to target address
 router.post('/test-smtp', async (req, res) => {
-  const { targetEmail } = req.body;
+  const { targetEmail } = req.body || {};
   const to = targetEmail || 'lalatechnigltd@gmail.com';
 
+  let transporter;
   try {
-    const transporter = createTransporter();
+    transporter = createTransporter();
     await transporter.verify();
+  } catch (err) {
+    console.warn('Primary SMTP test verification failed, attempting port 587 fallback...', err.message);
+    try {
+      transporter = createTransporter(587, false);
+      await transporter.verify();
+    } catch (err2) {
+      console.error('All SMTP test verification attempts failed:', err2.message);
+      return res.status(500).json({ success: false, error: 'SMTP Verification Failed: ' + err.message });
+    }
+  }
 
+  try {
     const info = await transporter.sendMail({
       from: `"${(process.env.FROM_NAME || 'Living Vine Properties Investment').trim()}" <${(process.env.FROM_EMAIL || 'connect@livingvinepropertiesinvestment.com').trim()}>`,
       to,
@@ -334,7 +346,7 @@ router.post('/test-smtp', async (req, res) => {
 
     res.json({ success: true, message: `Test email sent to ${to}`, messageId: info.messageId });
   } catch (err) {
-    console.error('Test SMTP failed:', err.message);
+    console.error('Test SMTP sendMail failed:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
