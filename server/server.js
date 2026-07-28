@@ -12,7 +12,7 @@ connectDb();
 
 // Middleware
 app.use(cors({
-  origin: ['https://livingvinetools.vercel.app'],
+  origin: ['https://test.livingvinepropertiesinvestment.com'],
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
