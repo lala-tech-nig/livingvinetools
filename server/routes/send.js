@@ -22,29 +22,34 @@ const upload = multer({
 });
 
 function createTransporter(overridePort, overrideSecure) {
-  const host = (process.env.SMTP_HOST || 'mail.livingvinepropertiesinvestment.com').trim();
+  let host = (process.env.SMTP_HOST || 'mail.livingvinepropertiesinvestment.com').trim();
+  host = host.replace(/^(https?:\/\/|smtp:\/\/)/i, '').trim();
+
   const user = (process.env.SMTP_USER || 'connect@livingvinepropertiesinvestment.com').trim();
   const pass = (process.env.SMTP_PASS || 'Livingvine2026.').trim();
   const port = overridePort || (process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : 465);
-  const isSecure = overrideSecure !== undefined ? overrideSecure : (port === 465 || process.env.SMTP_SECURE === 'true');
+  const isSecure = overrideSecure !== undefined ? overrideSecure : (port === 465);
 
-  return nodemailer.createTransport({
+  const transportOptions = {
     host,
     port,
     secure: isSecure,
     auth: { user, pass },
-    pool: true,
-    maxConnections: 3,
-    maxMessages: 100,
-    rateLimit: 5,
-    connectionTimeout: 20000,
-    greetingTimeout: 20000,
-    socketTimeout: 30000,
+    family: 4, // CRITICAL FOR RENDER/CLOUD: Force IPv4 connection to prevent IPv6 DNS timeout
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
     tls: {
       rejectUnauthorized: false,
-      minVersion: 'TLSv1.2'
+      servername: host
     }
-  });
+  };
+
+  if (process.env.SMTP_SERVICE) {
+    transportOptions.service = process.env.SMTP_SERVICE.trim();
+  }
+
+  return nodemailer.createTransport(transportOptions);
 }
 
 function parseRecipientFile(buffer) {
@@ -302,6 +307,35 @@ router.post('/preview', upload.single('file'), (req, res) => {
     res.json({ success: true, data: { recipients, count: recipients.length } });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/send/test-smtp — verify & send test email to target address
+router.post('/test-smtp', async (req, res) => {
+  const { targetEmail } = req.body;
+  const to = targetEmail || 'lalatechnigltd@gmail.com';
+
+  try {
+    const transporter = createTransporter();
+    await transporter.verify();
+
+    const info = await transporter.sendMail({
+      from: `"${(process.env.FROM_NAME || 'Living Vine Properties Investment').trim()}" <${(process.env.FROM_EMAIL || 'connect@livingvinepropertiesinvestment.com').trim()}>`,
+      to,
+      subject: 'LivingVine SMTP Verification Test',
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 24px; color: #111827;">
+          <h2 style="color: #800020;">LivingVine Properties Investment</h2>
+          <p>This is a test email sent from LivingVine Email Hub to confirm that SMTP credentials and delivery are operating properly.</p>
+          <p><strong>Status:</strong> ✅ Operational</p>
+        </div>
+      `
+    });
+
+    res.json({ success: true, message: `Test email sent to ${to}`, messageId: info.messageId });
+  } catch (err) {
+    console.error('Test SMTP failed:', err.message);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

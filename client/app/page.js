@@ -72,6 +72,29 @@ export default function DashboardPage() {
     fetchData();
   };
 
+  const [testingSmtp, setTestingSmtp] = useState(false);
+
+  const handleTestSMTP = async () => {
+    setTestingSmtp(true);
+    try {
+      const res = await fetch('/api/send/test-smtp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetEmail: 'lalatechnigltd@gmail.com' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        addToast('success', '✅ SMTP Test Successful', `Test email sent to lalatechnigltd@gmail.com!`);
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (err) {
+      addToast('error', '❌ SMTP Connection Error', err.message);
+    } finally {
+      setTestingSmtp(false);
+    }
+  };
+
   return (
     <>
       <div className="page-header">
@@ -81,12 +104,17 @@ export default function DashboardPage() {
             Overview of all sent bulk emails, tracking metrics, and individual campaign analytics
           </div>
         </div>
-        <button className="btn btn-primary btn-lg" onClick={() => setShowModal(true)}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          Create New Bulk Email
-        </button>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary btn-lg" onClick={handleTestSMTP} disabled={testingSmtp}>
+            {testingSmtp ? '⚡ Testing SMTP...' : '🔌 Test SMTP Connection'}
+          </button>
+          <button className="btn btn-primary btn-lg" onClick={() => setShowModal(true)}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Create New Bulk Email
+          </button>
+        </div>
       </div>
 
       <div className="page-body">
