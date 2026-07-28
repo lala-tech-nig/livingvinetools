@@ -35,18 +35,20 @@ function createTransporter(overridePort, overrideSecure) {
     port,
     secure: isSecure,
     auth: { user, pass },
-    family: 4, // CRITICAL FOR RENDER/CLOUD: Force IPv4 connection to prevent IPv6 DNS timeout
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 20000,
+    family: 4, // Force IPv4 connection
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
     tls: {
       rejectUnauthorized: false,
       servername: host
     }
   };
 
-  if (process.env.SMTP_SERVICE) {
-    transportOptions.service = process.env.SMTP_SERVICE.trim();
+  if (process.env.SMTP_SERVICE || host.includes('gmail')) {
+    delete transportOptions.host;
+    delete transportOptions.port;
+    transportOptions.service = (process.env.SMTP_SERVICE || 'gmail').trim();
   }
 
   return nodemailer.createTransport(transportOptions);
@@ -328,7 +330,11 @@ async function runTestSMTP(targetEmail) {
       await transporter.verify();
     } catch (err2) {
       console.error('All SMTP test verification attempts failed:', err2.message);
-      throw new Error('SMTP Verification Failed: ' + err.message);
+      const isTimeout = err.message.toLowerCase().includes('timeout') || err2.message.toLowerCase().includes('timeout');
+      const detailMsg = isTimeout
+        ? `SMTP Timeout on Render: Cloud host blocked port 465/587 outbound to ${process.env.SMTP_HOST || 'cPanel'}. Please set SMTP_HOST=smtp.gmail.com (with SMTP_USER & Gmail App Password) or a transactional relay (Brevo/SendGrid) in Render Environment Variables.`
+        : `SMTP Connection Failed: ${err.message}`;
+      throw new Error(detailMsg);
     }
   }
 
