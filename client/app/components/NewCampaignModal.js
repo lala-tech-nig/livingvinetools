@@ -155,6 +155,17 @@ export default function NewCampaignModal({ onClose, onSuccess }) {
           {/* STEP 2: Compose */}
           {step === 2 && (
             <>
+              {/* Recipient Sample Preview Banner */}
+              <div style={{ marginBottom: '16px', padding: '12px 14px', background: '#F9FAFB', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                <div>
+                  <span style={{ fontWeight: 700, color: 'var(--brand-wine)' }}>👥 Recipient Preview ({recipients.length} total):</span>{' '}
+                  <span>Sample: <strong>{recipients[0]?.name || 'Valued Recipient'}</strong> &lt;{recipients[0]?.email || 'N/A'}&gt;</span>
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', background: '#E5E7EB', padding: '2px 8px', borderRadius: '12px' }}>
+                  {'{name}'} → {recipients[0]?.name || 'Valued Recipient'}
+                </div>
+              </div>
+
               {/* Campaign Name Input */}
               <div className="form-group">
                 <label className="form-label">Campaign Name *</label>
@@ -173,7 +184,7 @@ export default function NewCampaignModal({ onClose, onSuccess }) {
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="e.g. Hello {name}, Exclusive LivingVine Offer"
+                  placeholder="e.g. Hello {name}, Exclusive Living Vine Offer"
                   value={subject}
                   onChange={e => setSubject(e.target.value)}
                 />
@@ -195,7 +206,7 @@ export default function NewCampaignModal({ onClose, onSuccess }) {
                 <textarea
                   id="email-body"
                   className="form-textarea"
-                  placeholder={`Dear {name},\n\nWe are pleased to introduce our newest property investment options at LivingVine Properties...\n\nWarm regards,\nLivingVine Properties Team`}
+                  placeholder={`Dear {name},\n\nWe are pleased to introduce our newest property investment options at Living Vine Properties...\n\nWarm regards,\nLiving Vine Properties Team`}
                   value={body}
                   onChange={e => setBody(e.target.value)}
                   style={{ minHeight: '180px' }}

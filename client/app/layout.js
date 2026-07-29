@@ -10,8 +10,8 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata = {
-  title: 'LivingVine Email Hub — Bulk Email Sender',
-  description: 'Bulk email sender and tracking suite for LivingVine Properties Investment',
+  title: 'Living Vine Email Hub — Bulk Email Sender',
+  description: 'Bulk email sender and tracking suite for Living Vine Properties Investment',
 };
 
 export default function RootLayout({ children }) {
@@ -29,7 +29,7 @@ export default function RootLayout({ children }) {
                 className="brand-logo-img"
               />
               <div className="brand-text">
-                <span className="brand-name">LIVINGVINE</span>
+                <span className="brand-name">LIVING VINE</span>
                 <span className="brand-sub">Email Hub</span>
               </div>
             </div>

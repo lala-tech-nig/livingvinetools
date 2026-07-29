@@ -73,7 +73,7 @@ export default function DashboardPage() {
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">LivingVine Bulk Email Dashboard</h1>
+          <h1 className="page-title">Living Vine Bulk Email Dashboard</h1>
           <div className="page-subtitle">
             Overview of all sent bulk emails, tracking metrics, and individual campaign analytics
           </div>
